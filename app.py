@@ -123,7 +123,7 @@ def make_feature_text_rich(data: Dict[str, Any]) -> str:
 # ==============================
 # Discover API to build a corpus
 # ==============================
-def collect_discover(media_type="movie", pages=3, date_gte="2016-01-01", language="en") -> pd.DataFrame:
+def collect_discover(media_type="movie", pages=5, date_gte="2016-01-01", language="en") -> pd.DataFrame:
     rows = []
     date_field = "primary_release_date.gte" if media_type == "movie" else "first_air_date.gte"
     for p in range(1, pages + 1):
@@ -150,7 +150,7 @@ def collect_discover(media_type="movie", pages=3, date_gte="2016-01-01", languag
     return pd.DataFrame(rows)
 
 @st.cache_data(show_spinner=True)
-def quick_build_corpus(pages_movie=4, pages_tv=3) -> pd.DataFrame:
+def quick_build_corpus(pages_movie=5, pages_tv=5) -> pd.DataFrame:
     """Quick corpus (~150–250 items) with rich feature text assembled."""
     movies = collect_discover("movie", pages=pages_movie, date_gte="2016-01-01")
     tv = collect_discover("tv", pages=pages_tv, date_gte="2016-01-01")
