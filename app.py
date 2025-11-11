@@ -12,11 +12,6 @@ from dotenv import load_dotenv
 # ==============================
 # Env + constants (v3 API key)
 # ==============================
-import sys, platform
-import streamlit as st
-st.sidebar.write("Python:", sys.version)
-st.sidebar.write("Platform:", platform.platform())
-
 ENV_PATH = Path(__file__).with_name(".env")
 load_dotenv(dotenv_path=ENV_PATH)
 
