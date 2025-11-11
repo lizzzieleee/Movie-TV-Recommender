@@ -3,8 +3,9 @@ python-dotenv
 requests
 pandas
 pyarrow
-numpy==1.26.4
-torch==2.2.2
+numpy<2
+torch==2.4.0
 sentence-transformers==2.7.0
-faiss-cpu==1.8.0.post1
+faiss-cpu==1.11.0.post1
+
 
