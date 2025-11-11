@@ -29,6 +29,14 @@ IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | ori
 MODELS_DIR = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
 
+USE_FAISS = True
+try:
+    import faiss  # uses CPU wheel
+except Exception:
+    USE_FAISS = False
+    from sklearn.neighbors import NearestNeighbors
+    import joblib
+
 # ==============================
 # Heavy libs for embeddings/index
 # ==============================
