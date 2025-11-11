@@ -412,14 +412,14 @@ else:
 top_k = st.slider("How many recommendations?", 5, 20, 10)
 pop_blend = st.slider("Blend with popularity", 0.0, 1.0, 0.2, 0.05, help="0 = pure similarity, 1 = pure popularity")
 
-if st.button("✨ Get Recommendations"):
-    if not (index is not None and not meta.empty):
+if st.button("✨ Get Recommendations"): 
+    if not (index_tuple is not None and not meta.empty):
         st.error("No index available. Build or load a corpus first.")
     elif not st.session_state.likes:
         st.warning("Add at least one title you like.")
     else:
         with st.spinner("Computing recommendations…"):
-            recs = recommend_from_selected(st.session_state.likes, meta, index, k=top_k, popularity_blend=pop_blend)
+            recs = recommend_from_selected(st.session_state.likes, meta, index_tuple, X, k=top_k, popularity_blend=pop_blend)
 
         if recs.empty:
             st.info("No recommendations found. Try different titles.")
