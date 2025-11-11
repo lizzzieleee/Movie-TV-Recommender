@@ -18,9 +18,8 @@ import sentence_transformers
 # Env + constants (v3 API key)
 # ==============================
 # --- Load prebuilt FAISS index and metadata ---
-MODELS_DIR = Path("models")
-META_PATH = MODELS_DIR / "meta.parquet"
-FAISS_PATH = MODELS_DIR / "index.faiss"
+META_PATH = "meta.parquet"
+FAISS_PATH = "index.faiss"
 
 meta = None
 index = None
@@ -32,10 +31,11 @@ try:
         meta = pd.read_parquet(META_PATH)
         index = faiss.read_index(str(FAISS_PATH))
     else:
-        st.warning("⚠️ No saved FAISS index found — rebuilding corpus (this may take a while)...")
-        meta, index = build_quick_corpus()  # replace with your corpus-building function
+        st.error("❌ models/index.faiss or models/meta.parquet not found. Please upload them to your repo.")
+        st.stop()
 except Exception as e:
     st.error(f"❌ Error loading index: {e}")
+    st.stop()
 
 BASE_URL = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"
