@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 import sys
 import platform
+import torch 
 
 # ==============================
 # Env + constants (v3 API key)
