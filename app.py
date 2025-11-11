@@ -42,6 +42,13 @@ IMG_BASE = "https://image.tmdb.org/t/p"
 
 TMDB_API_KEY = st.secrets.get("TMDB_API_KEY")
 
+# --- FAISS backend flag ---
+try:
+    import faiss
+    USE_FAISS = True
+except ImportError:
+    USE_FAISS = False
+
 # ==============================
 # Heavy libs for embeddings/index
 # ==============================
