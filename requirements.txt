@@ -1,0 +1,8 @@
+streamlit>=1.37
+python-dotenv
+requests
+pandas
+sentence-transformers
+faiss-cpu==1.8.0.post1
+pyarrow
+torch           # lets sentence-transformers install cleanly on CPU
