@@ -215,7 +215,7 @@ def build_index_and_save(enriched: pd.DataFrame):
         return ("sklearn", nn), X
 
 def load_index_and_meta():
-    meta_path = MODELS_DIR / "meta.parquet"
+    meta_path = "meta.parquet"
     if not meta_path.exists():
         return pd.DataFrame(), None, None
 
