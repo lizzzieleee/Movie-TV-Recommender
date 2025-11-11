@@ -303,7 +303,7 @@ if "selected_idx" not in st.session_state:
     st.session_state.selected_idx: Optional[int] = None
 
 # Build/Load index
-meta, index = load_index_and_meta()
+meta, index_tuple, X = load_index_and_meta()
 # Auto-build a small index on first run (fast), then reuse it
 AUTO_BUILD_ON_FIRST_RUN = True
 DEFAULT_MOVIE_PAGES = 3
