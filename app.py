@@ -15,16 +15,19 @@ from dotenv import load_dotenv
 ENV_PATH = Path(__file__).with_name(".env")
 load_dotenv(dotenv_path=ENV_PATH)
 
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+# Prefer secrets in the cloud; use .env locally
+TMDB_API_KEY = st.secrets.get("TMDB_API_KEY")
+if not TMDB_API_KEY:
+    load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
+    TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+if not TMDB_API_KEY:
+    st.error("TMDB_API_KEY not set. Add it to Streamlit Secrets or .env.")
+    st.stop()
 BASE_URL = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | original
 
 MODELS_DIR = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
-
-if not TMDB_API_KEY:
-    st.error("⚠️ TMDB_API_KEY not found. Create a .env next to app.py with:\n\nTMDB_API_KEY=your_key_here")
-    st.stop()
 
 # ==============================
 # Heavy libs for embeddings/index
