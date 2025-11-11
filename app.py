@@ -136,7 +136,7 @@ def make_feature_text_rich(data: Dict[str, Any]) -> str:
 # ==============================
 # Discover API to build a corpus
 # ==============================
-def collect_discover(media_type="movie", pages=5, date_gte=DATE_GTE, language=LANGUAGE): -> pd.DataFrame:
+def collect_discover(media_type="movie", pages=5, date_gte=DATE_GTE, language=LANGUAGE): 
     rows = []
     date_field = "primary_release_date.gte" if media_type == "movie" else "first_air_date.gte"
     for p in range(1, pages + 1):
