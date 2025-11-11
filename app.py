@@ -35,9 +35,11 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 USE_FAISS = True
 try:
-    import faiss  # uses CPU wheel
-except Exception:
+    import faiss
+    st.sidebar.success(f"FAISS version: {faiss.__version__}")
+except Exception as e:
     USE_FAISS = False
+    st.sidebar.error(f"FAISS import failed: {e}")
     from sklearn.neighbors import NearestNeighbors
     import joblib
 
