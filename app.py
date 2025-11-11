@@ -17,37 +17,25 @@ import sentence_transformers
 # ==============================
 # Env + constants (v3 API key)
 # ==============================
-ENV_PATH = Path(__file__).with_name(".env")
-load_dotenv(dotenv_path=ENV_PATH)
-
-# --- Prefer Streamlit secrets when available ---
-TMDB_API_KEY = st.secrets.get("TMDB_API_KEY")
-
-# --- Fallback for local development ---
-if not TMDB_API_KEY:
-    load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
-    TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-
-if not TMDB_API_KEY:
-    st.error("⚠️ TMDB_API_KEY not found. Add it to Streamlit Secrets or .env.")
-    st.stop()
-    
-BASE_URL = "https://api.themoviedb.org/3"
-IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | original
-
+# --- Load prebuilt FAISS index and metadata ---
 MODELS_DIR = Path("models")
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+META_PATH = MODELS_DIR / "meta.parquet"
+FAISS_PATH = MODELS_DIR / "index.faiss"
 
-st.sidebar.write("Python:", sys.version)
+meta = None
+index = None
+
 try:
-    import faiss
-    st.sidebar.write("FAISS:", faiss.__version__)
+    if META_PATH.exists() and FAISS_PATH.exists():
+        import faiss
+        st.write("✅ Using prebuilt FAISS index and metadata")
+        meta = pd.read_parquet(META_PATH)
+        index = faiss.read_index(str(FAISS_PATH))
+    else:
+        st.warning("⚠️ No saved FAISS index found — rebuilding corpus (this may take a while)...")
+        meta, index = build_quick_corpus()  # replace with your corpus-building function
 except Exception as e:
-    st.sidebar.write("FAISS: not loaded", str(e))
-st.sidebar.write("Torch:", torch.__version__)
-st.sidebar.write("SentenceTransformers:", sentence_transformers.__version__)
-st.sidebar.write("NumPy:", np.__version__)
-st.sidebar.write("Pandas:", pd.__version__)
+    st.error(f"❌ Error loading index: {e}")
 
 # ==============================
 # Heavy libs for embeddings/index
