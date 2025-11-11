@@ -25,7 +25,7 @@ meta = None
 index = None
 
 try:
-    if META_PATH.exists() and FAISS_PATH.exists():
+    if META_PATH and FAISS_PATH:
         import faiss
         st.write("✅ Using prebuilt FAISS index and metadata")
         meta = pd.read_parquet(META_PATH)
