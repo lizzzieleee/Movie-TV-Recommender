@@ -33,15 +33,16 @@ IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | ori
 MODELS_DIR = Path("models")
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-USE_FAISS = True
+st.sidebar.write("Python:", sys.version)
 try:
     import faiss
-    st.sidebar.success(f"FAISS version: {faiss.__version__}")
+    st.sidebar.write("FAISS:", faiss.__version__)
 except Exception as e:
-    USE_FAISS = False
-    st.sidebar.error(f"FAISS import failed: {e}")
-    from sklearn.neighbors import NearestNeighbors
-    import joblib
+    st.sidebar.write("FAISS: not loaded", str(e))
+st.sidebar.write("Torch:", torch.__version__)
+st.sidebar.write("SentenceTransformers:", sentence_transformers.__version__)
+st.sidebar.write("NumPy:", np.__version__)
+st.sidebar.write("Pandas:", pd.__version__)
 
 # ==============================
 # Heavy libs for embeddings/index
