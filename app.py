@@ -9,50 +9,57 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-import sys
-import platform
-import torch 
-import sentence_transformers
-
 # ==============================
 # Env + constants (v3 API key)
 # ==============================
-# --- Load prebuilt FAISS index and metadata ---
-META_PATH = "meta.parquet"
-FAISS_PATH = "index.faiss"
+ENV_PATH = Path(__file__).with_name(".env")
+load_dotenv(dotenv_path=ENV_PATH)
 
-meta = None
-index = None
-
-try:
-    if META_PATH and FAISS_PATH:
-        import faiss
-        st.write("✅ Using prebuilt FAISS index and metadata")
-        meta = pd.read_parquet(META_PATH)
-        index = faiss.read_index(str(FAISS_PATH))
-    else:
-        st.error("❌ models/index.faiss or models/meta.parquet not found. Please upload them to your repo.")
-        st.stop()
-except Exception as e:
-    st.error(f"❌ Error loading index: {e}")
-    st.stop()
-
-BASE_URL = "https://api.themoviedb.org/3"
-IMG_BASE = "https://image.tmdb.org/t/p"
-
+# --- Prefer Streamlit secrets when available ---
 TMDB_API_KEY = st.secrets.get("TMDB_API_KEY")
 
-# --- FAISS backend flag ---
-try:
-    import faiss
-    USE_FAISS = True
-except ImportError:
-    USE_FAISS = False
+# --- Fallback for local development ---
+if not TMDB_API_KEY:
+    load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
+    TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-MOVIE_PAGES   = int(st.secrets.get("CORPUS_MOVIE_PAGES", 5))
-TV_PAGES      = int(st.secrets.get("CORPUS_TV_PAGES", 5))
-DATE_GTE      = st.secrets.get("CORPUS_DATE_GTE", "2016-01-01")
-LANGUAGE      = st.secrets.get("CORPUS_LANGUAGE", "en")
+if not TMDB_API_KEY:
+    st.error("⚠️ TMDB_API_KEY not found. Add it to Streamlit Secrets or .env.")
+    st.stop()
+    
+BASE_URL = "https://api.themoviedb.org/3"
+IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | original
+
+MODELS_DIR = Path("models")
+MODELS_DIR.mkdir(exist_ok=True)
+
+import os
+from pathlib import Path
+st.caption("**Debug: storage**")
+cwd = os.getcwd()
+meta_path = (MODELS_DIR / "meta.parquet").resolve()
+faiss_path = (MODELS_DIR / "index.faiss").resolve()
+nn_path = (MODELS_DIR / "nn.joblib").resolve()
+emb_path = (MODELS_DIR / "embeddings.npy").resolve()
+
+st.write("CWD:", cwd)
+st.write("MODELS_DIR:", MODELS_DIR.resolve())
+st.write("meta exists:", meta_path.exists(), "|", str(meta_path))
+st.write("faiss index exists:", faiss_path.exists(), "|", str(faiss_path))
+st.write("sklearn nn exists:", nn_path.exists(), "|", str(nn_path))
+st.write("embeddings exists:", emb_path.exists(), "|", str(emb_path))
+if meta_path.exists():
+    st.write("meta size (bytes):", meta_path.stat().st_size)
+if faiss_path.exists():
+    st.write("faiss size (bytes):", faiss_path.stat().st_size)
+
+USE_FAISS = True
+try:
+    import faiss  # uses CPU wheel
+except Exception:
+    USE_FAISS = False
+    from sklearn.neighbors import NearestNeighbors
+    import joblib
 
 # ==============================
 # Heavy libs for embeddings/index
@@ -136,7 +143,7 @@ def make_feature_text_rich(data: Dict[str, Any]) -> str:
 # ==============================
 # Discover API to build a corpus
 # ==============================
-def collect_discover(media_type="movie", pages=5, date_gte=DATE_GTE, language=LANGUAGE): 
+def collect_discover(media_type="movie", pages=3, date_gte="2016-01-01", language="en") -> pd.DataFrame:
     rows = []
     date_field = "primary_release_date.gte" if media_type == "movie" else "first_air_date.gte"
     for p in range(1, pages + 1):
@@ -193,50 +200,26 @@ def quick_build_corpus(pages_movie=4, pages_tv=3) -> pd.DataFrame:
 # ==============================
 # Index build/load + recommend
 # ==============================
-def build_index_and_save(enriched: pd.DataFrame):
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+def build_index_and_save(enriched: pd.DataFrame) -> faiss.Index:
     texts = enriched["feature_text"].fillna("").tolist()
-    X = EMBEDDER.encode(texts, normalize_embeddings=True).astype("float32")
+    X = EMBEDDER.encode(texts, batch_size=256, show_progress_bar=True, normalize_embeddings=True)
+    X = np.asarray(X, dtype="float32")
+    index = faiss.IndexFlatIP(X.shape[1])  # cosine when normalized
+    index.add(X)
+    # Save artifacts
+    meta_cols = ["media_type", "tmdb_id", "title", "release_date", "popularity", "poster_path"]
+    (enriched[meta_cols]).to_parquet(MODELS_DIR / "meta.parquet", index=False)
+    faiss.write_index(index, str(MODELS_DIR / "index.faiss"))
+    return index
 
-    # Always save meta
-    meta_cols = ["media_type","tmdb_id","title","release_date","popularity","poster_path"]
-    enriched[meta_cols].to_parquet(MODELS_DIR / "meta.parquet", index=False)
-
-    if USE_FAISS:
-        index = faiss.IndexFlatIP(X.shape[1])
-        index.add(X)
-        faiss.write_index(index, str(MODELS_DIR / "index.faiss"))
-        np.save(MODELS_DIR / "embeddings.npy", X)  # optional
-        return ("faiss", index), X
-    else:
-        nn = NearestNeighbors(metric="cosine").fit(X)
-        joblib.dump(nn, MODELS_DIR / "nn.joblib")
-        np.save(MODELS_DIR / "embeddings.npy", X)
-        return ("sklearn", nn), X
-
-def load_index_and_meta():
-    meta_path = "meta.parquet"
-    if not meta_path.exists():
-        return pd.DataFrame(), None, None
-
-    meta = pd.read_parquet(meta_path)
-    faiss_path = MODELS_DIR / "index.faiss"
-    nn_path = MODELS_DIR / "nn.joblib"
-    emb_path = MODELS_DIR / "embeddings.npy"
-    X = np.load(emb_path) if emb_path.exists() else None
-
-    if faiss_path.exists():
-        # FAISS backend
-        index = faiss.read_index(str(faiss_path))
-        return meta, ("faiss", index), X
-    if nn_path.exists():
-        # sklearn backend
-        from sklearn.neighbors import NearestNeighbors
-        import joblib
-        nn = joblib.load(nn_path)
-        return meta, ("sklearn", nn), X
-
-    return meta, None, X
+def load_index_and_meta() -> Tuple[pd.DataFrame, Optional[faiss.Index]]:
+    meta_path = MODELS_DIR / "meta.parquet"
+    index_path = MODELS_DIR / "index.faiss"
+    if meta_path.exists() and index_path.exists():
+        meta = pd.read_parquet(meta_path)
+        index = faiss.read_index(str(index_path))
+        return meta, index
+    return pd.DataFrame(), None
 
 def feature_text_for_id(media_type: str, tmdb_id: int) -> str:
     rich = fetch_details_rich(media_type, tmdb_id)
@@ -259,46 +242,25 @@ def query_vector_from_selected(liked_items: List[Dict[str, Any]]) -> Optional[np
     V = EMBEDDER.encode(texts, normalize_embeddings=True).astype("float32")
     return V.mean(axis=0, keepdims=True)
 
-def recommend_from_selected(
-    liked_items, meta, index_tuple, X, k=12, popularity_blend=0.2
-):
-    # Build query vector
+def recommend_from_selected(liked_items: List[Dict[str, Any]], meta: pd.DataFrame, index: faiss.Index, k=12, popularity_blend=0.2) -> pd.DataFrame:
     qvec = query_vector_from_selected(liked_items)
-    if qvec is None or index_tuple is None or meta.empty:
+    if qvec is None:
         return pd.DataFrame(columns=list(meta.columns) + ["score"])
 
-    backend, index = index_tuple
     m = max(3 * k, 60)
+    D, I = index.search(qvec, m)
+    recs = meta.iloc[I[0]].copy().reset_index(drop=True)
 
-    if backend == "faiss":
-        D, I = index.search(qvec.astype("float32"), m)
-        sims = D[0]
-        idxs = I[0]
-    else:
-        # sklearn NearestNeighbors (cosine distance -> similarity = 1 - dist)
-        from sklearn.neighbors import NearestNeighbors  # safe if fallback
-        dists, idxs = index.kneighbors(qvec, n_neighbors=min(m, X.shape[0]))
-        sims = 1.0 - dists[0]
-        idxs = idxs[0]
-
-    recs = meta.iloc[idxs].copy().reset_index(drop=True)
-
-    # drop liked items
     liked_set = {(it["media_type"], int(it["tmdb_id"])) for it in liked_items}
     recs = recs[~recs.apply(lambda r: (r["media_type"], int(r["tmdb_id"])) in liked_set, axis=1)]
 
-    # normalize similarity
-    sims = sims[: len(recs)]
-    sims = (sims - sims.min()) / (sims.max() - sims.min() + 1e-8)
-
-    # optional popularity blend
     if popularity_blend and "popularity" in recs.columns:
+        sims = D[0][:len(recs)]
+        sims = (sims - sims.min()) / (sims.max() - sims.min() + 1e-8)
         pop = recs["popularity"].to_numpy()
         pop = (pop - pop.min()) / (pop.max() - pop.min() + 1e-8)
         recs["score"] = (1 - popularity_blend) * sims + popularity_blend * pop
         recs = recs.sort_values("score", ascending=False)
-    else:
-        recs["score"] = sims
 
     return recs.head(k).reset_index(drop=True)
 
@@ -337,28 +299,24 @@ if "selected_idx" not in st.session_state:
     st.session_state.selected_idx: Optional[int] = None
 
 # Build/Load index
-meta, index_tuple, X = load_index_and_meta()
-# Auto-build a small index on first run (fast), then reuse it
-AUTO_BUILD_ON_FIRST_RUN = True
-DEFAULT_MOVIE_PAGES = 3
-DEFAULT_TV_PAGES = 2
-
-meta, index_tuple, X = load_index_and_meta()  # see functions below
-
-if (index_tuple is None or meta.empty) and AUTO_BUILD_ON_FIRST_RUN:
-    with st.spinner("First run: building a small corpus & index…"):
-        try:
-            enriched = quick_build_corpus(pages_movie=DEFAULT_MOVIE_PAGES,
-                                          pages_tv=DEFAULT_TV_PAGES)
-            if enriched.empty:
-                st.warning("Auto-build returned no items. Use the manual builder.")
-            else:
-                index_tuple, X = build_index_and_save(enriched)  # returns ("faiss", index) or ("sklearn", nn)
-                meta, index_tuple, X = load_index_and_meta()
-                if index_tuple is not None and not meta.empty:
-                    st.success(f"Built index with {len(meta)} titles.")
-        except Exception as e:
-            st.error(f"Auto-build failed: {e}")
+meta, index = load_index_and_meta()
+if index is not None and not meta.empty:
+    st.success(f"Loaded corpus with {len(meta)} titles.")
+else:
+    st.warning("No saved index found. Build a quick corpus to enable recommendations.")
+    with st.expander("⚙️ Build corpus & index (one-time)", expanded=True):
+        pages_movie = st.slider("Movie pages (discover)", 2, 8, 4, help="Each page ~20 titles")
+        pages_tv = st.slider("TV pages (discover)", 2, 8, 3, help="Each page ~20 titles")
+        if st.button("🚀 Quick-build corpus & index"):
+            with st.spinner("Building corpus and index…"):
+                enriched = quick_build_corpus(pages_movie=pages_movie, pages_tv=pages_tv)
+                if enriched.empty:
+                    st.error("Corpus build returned no items.")
+                else:
+                    index = build_index_and_save(enriched)
+                    meta, index = load_index_and_meta()
+                    if index is not None and not meta.empty:
+                        st.success(f"Built and saved index with {len(meta)} titles.")
 
 st.divider()
 
@@ -446,14 +404,14 @@ else:
 top_k = st.slider("How many recommendations?", 5, 20, 10)
 pop_blend = st.slider("Blend with popularity", 0.0, 1.0, 0.2, 0.05, help="0 = pure similarity, 1 = pure popularity")
 
-if st.button("✨ Get Recommendations"): 
-    if not (index_tuple is not None and not meta.empty):
+if st.button("✨ Get Recommendations"):
+    if not (index is not None and not meta.empty):
         st.error("No index available. Build or load a corpus first.")
     elif not st.session_state.likes:
         st.warning("Add at least one title you like.")
     else:
         with st.spinner("Computing recommendations…"):
-            recs = recommend_from_selected(st.session_state.likes, meta, index_tuple, X, k=top_k, popularity_blend=pop_blend)
+            recs = recommend_from_selected(st.session_state.likes, meta, index, k=top_k, popularity_blend=pop_blend)
 
         if recs.empty:
             st.info("No recommendations found. Try different titles.")
