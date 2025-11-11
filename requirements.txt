@@ -2,7 +2,9 @@ streamlit>=1.37
 python-dotenv
 requests
 pandas
-sentence-transformers
-faiss-cpu==1.8.0.post1
 pyarrow
-torch           # lets sentence-transformers install cleanly on CPU
+numpy==1.26.4
+torch==2.2.2
+sentence-transformers==2.7.0
+faiss-cpu==1.8.0.post1
+
