@@ -246,25 +246,46 @@ def query_vector_from_selected(liked_items: List[Dict[str, Any]]) -> Optional[np
     V = EMBEDDER.encode(texts, normalize_embeddings=True).astype("float32")
     return V.mean(axis=0, keepdims=True)
 
-def recommend_from_selected(liked_items: List[Dict[str, Any]], meta: pd.DataFrame, index: faiss.Index, k=12, popularity_blend=0.2) -> pd.DataFrame:
+def recommend_from_selected(
+    liked_items, meta, index_tuple, X, k=12, popularity_blend=0.2
+):
+    # Build query vector
     qvec = query_vector_from_selected(liked_items)
-    if qvec is None:
+    if qvec is None or index_tuple is None or meta.empty:
         return pd.DataFrame(columns=list(meta.columns) + ["score"])
 
+    backend, index = index_tuple
     m = max(3 * k, 60)
-    D, I = index.search(qvec, m)
-    recs = meta.iloc[I[0]].copy().reset_index(drop=True)
 
+    if backend == "faiss":
+        D, I = index.search(qvec.astype("float32"), m)
+        sims = D[0]
+        idxs = I[0]
+    else:
+        # sklearn NearestNeighbors (cosine distance -> similarity = 1 - dist)
+        from sklearn.neighbors import NearestNeighbors  # safe if fallback
+        dists, idxs = index.kneighbors(qvec, n_neighbors=min(m, X.shape[0]))
+        sims = 1.0 - dists[0]
+        idxs = idxs[0]
+
+    recs = meta.iloc[idxs].copy().reset_index(drop=True)
+
+    # drop liked items
     liked_set = {(it["media_type"], int(it["tmdb_id"])) for it in liked_items}
     recs = recs[~recs.apply(lambda r: (r["media_type"], int(r["tmdb_id"])) in liked_set, axis=1)]
 
+    # normalize similarity
+    sims = sims[: len(recs)]
+    sims = (sims - sims.min()) / (sims.max() - sims.min() + 1e-8)
+
+    # optional popularity blend
     if popularity_blend and "popularity" in recs.columns:
-        sims = D[0][:len(recs)]
-        sims = (sims - sims.min()) / (sims.max() - sims.min() + 1e-8)
         pop = recs["popularity"].to_numpy()
         pop = (pop - pop.min()) / (pop.max() - pop.min() + 1e-8)
         recs["score"] = (1 - popularity_blend) * sims + popularity_blend * pop
         recs = recs.sort_values("score", ascending=False)
+    else:
+        recs["score"] = sims
 
     return recs.head(k).reset_index(drop=True)
 
