@@ -255,3 +255,10 @@ data/
 *.ipynb
 notebooks/
 
+# don’t ignore the model artifacts
+!models/meta.parquet
+!models/index.faiss
+!models/nn.joblib
+!models/embeddings.npy
+
+
