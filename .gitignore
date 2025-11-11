@@ -205,3 +205,53 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Environments ---
+.env
+.venv/
+venv/
+env/
+ENV/
+.ipynb_checkpoints/
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+
+# --- Streamlit / Cache ---
+.streamlit/
+.cache/
+cache/
+models/
+tmdb/
+data/
+
+# --- Logs / temporary files ---
+*.log
+*.tmp
+*.parquet
+*.json
+*.csv
+*.gz
+*.zip
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+
+# --- Local notebooks or experiments ---
+*.ipynb
+notebooks/
+
