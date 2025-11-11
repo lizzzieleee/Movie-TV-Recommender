@@ -33,26 +33,6 @@ IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | ori
 MODELS_DIR = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
 
-import os
-from pathlib import Path
-st.caption("**Debug: storage**")
-cwd = os.getcwd()
-meta_path = (MODELS_DIR / "meta.parquet").resolve()
-faiss_path = (MODELS_DIR / "index.faiss").resolve()
-nn_path = (MODELS_DIR / "nn.joblib").resolve()
-emb_path = (MODELS_DIR / "embeddings.npy").resolve()
-
-st.write("CWD:", cwd)
-st.write("MODELS_DIR:", MODELS_DIR.resolve())
-st.write("meta exists:", meta_path.exists(), "|", str(meta_path))
-st.write("faiss index exists:", faiss_path.exists(), "|", str(faiss_path))
-st.write("sklearn nn exists:", nn_path.exists(), "|", str(nn_path))
-st.write("embeddings exists:", emb_path.exists(), "|", str(emb_path))
-if meta_path.exists():
-    st.write("meta size (bytes):", meta_path.stat().st_size)
-if faiss_path.exists():
-    st.write("faiss size (bytes):", faiss_path.stat().st_size)
-
 USE_FAISS = True
 try:
     import faiss  # uses CPU wheel
@@ -60,6 +40,17 @@ except Exception:
     USE_FAISS = False
     from sklearn.neighbors import NearestNeighbors
     import joblib
+
+st.caption("**Debug: storage**")
+from pathlib import Path
+meta_path = MODELS_DIR / "meta.parquet"
+faiss_path = MODELS_DIR / "index.faiss"
+nn_path = MODELS_DIR / "nn.joblib"
+emb_path = MODELS_DIR / "embeddings.npy"
+st.write("meta exists:", meta_path.exists(), "|", meta_path.resolve())
+st.write("faiss index exists:", faiss_path.exists(), "|", faiss_path.resolve())
+st.write("sklearn nn exists:", nn_path.exists(), "|", nn_path.resolve())
+st.write("embeddings exists:", emb_path.exists(), "|", emb_path.resolve())
 
 # ==============================
 # Heavy libs for embeddings/index
