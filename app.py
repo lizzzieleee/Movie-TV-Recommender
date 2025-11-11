@@ -31,7 +31,7 @@ BASE_URL = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | original
 
 MODELS_DIR = Path("models")
-MODELS_DIR.mkdir(exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 USE_FAISS = True
 try:
@@ -40,17 +40,6 @@ except Exception:
     USE_FAISS = False
     from sklearn.neighbors import NearestNeighbors
     import joblib
-
-st.caption("**Debug: storage**")
-from pathlib import Path
-meta_path = MODELS_DIR / "meta.parquet"
-faiss_path = MODELS_DIR / "index.faiss"
-nn_path = MODELS_DIR / "nn.joblib"
-emb_path = MODELS_DIR / "embeddings.npy"
-st.write("meta exists:", meta_path.exists(), "|", meta_path.resolve())
-st.write("faiss index exists:", faiss_path.exists(), "|", faiss_path.resolve())
-st.write("sklearn nn exists:", nn_path.exists(), "|", nn_path.resolve())
-st.write("embeddings exists:", emb_path.exists(), "|", emb_path.resolve())
 
 # ==============================
 # Heavy libs for embeddings/index
@@ -191,26 +180,50 @@ def quick_build_corpus(pages_movie=4, pages_tv=3) -> pd.DataFrame:
 # ==============================
 # Index build/load + recommend
 # ==============================
-def build_index_and_save(enriched: pd.DataFrame) -> faiss.Index:
+def build_index_and_save(enriched: pd.DataFrame):
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
     texts = enriched["feature_text"].fillna("").tolist()
-    X = EMBEDDER.encode(texts, batch_size=256, show_progress_bar=True, normalize_embeddings=True)
-    X = np.asarray(X, dtype="float32")
-    index = faiss.IndexFlatIP(X.shape[1])  # cosine when normalized
-    index.add(X)
-    # Save artifacts
-    meta_cols = ["media_type", "tmdb_id", "title", "release_date", "popularity", "poster_path"]
-    (enriched[meta_cols]).to_parquet(MODELS_DIR / "meta.parquet", index=False)
-    faiss.write_index(index, str(MODELS_DIR / "index.faiss"))
-    return index
+    X = EMBEDDER.encode(texts, normalize_embeddings=True).astype("float32")
 
-def load_index_and_meta() -> Tuple[pd.DataFrame, Optional[faiss.Index]]:
+    # Always save meta
+    meta_cols = ["media_type","tmdb_id","title","release_date","popularity","poster_path"]
+    enriched[meta_cols].to_parquet(MODELS_DIR / "meta.parquet", index=False)
+
+    if USE_FAISS:
+        index = faiss.IndexFlatIP(X.shape[1])
+        index.add(X)
+        faiss.write_index(index, str(MODELS_DIR / "index.faiss"))
+        np.save(MODELS_DIR / "embeddings.npy", X)  # optional
+        return ("faiss", index), X
+    else:
+        nn = NearestNeighbors(metric="cosine").fit(X)
+        joblib.dump(nn, MODELS_DIR / "nn.joblib")
+        np.save(MODELS_DIR / "embeddings.npy", X)
+        return ("sklearn", nn), X
+
+def load_index_and_meta():
     meta_path = MODELS_DIR / "meta.parquet"
-    index_path = MODELS_DIR / "index.faiss"
-    if meta_path.exists() and index_path.exists():
-        meta = pd.read_parquet(meta_path)
-        index = faiss.read_index(str(index_path))
-        return meta, index
-    return pd.DataFrame(), None
+    if not meta_path.exists():
+        return pd.DataFrame(), None, None
+
+    meta = pd.read_parquet(meta_path)
+    faiss_path = MODELS_DIR / "index.faiss"
+    nn_path = MODELS_DIR / "nn.joblib"
+    emb_path = MODELS_DIR / "embeddings.npy"
+    X = np.load(emb_path) if emb_path.exists() else None
+
+    if faiss_path.exists():
+        # FAISS backend
+        index = faiss.read_index(str(faiss_path))
+        return meta, ("faiss", index), X
+    if nn_path.exists():
+        # sklearn backend
+        from sklearn.neighbors import NearestNeighbors
+        import joblib
+        nn = joblib.load(nn_path)
+        return meta, ("sklearn", nn), X
+
+    return meta, None, X
 
 def feature_text_for_id(media_type: str, tmdb_id: int) -> str:
     rich = fetch_details_rich(media_type, tmdb_id)
@@ -291,23 +304,27 @@ if "selected_idx" not in st.session_state:
 
 # Build/Load index
 meta, index = load_index_and_meta()
-if index is not None and not meta.empty:
-    st.success(f"Loaded corpus with {len(meta)} titles.")
-else:
-    st.warning("No saved index found. Build a quick corpus to enable recommendations.")
-    with st.expander("⚙️ Build corpus & index (one-time)", expanded=True):
-        pages_movie = st.slider("Movie pages (discover)", 2, 8, 4, help="Each page ~20 titles")
-        pages_tv = st.slider("TV pages (discover)", 2, 8, 3, help="Each page ~20 titles")
-        if st.button("🚀 Quick-build corpus & index"):
-            with st.spinner("Building corpus and index…"):
-                enriched = quick_build_corpus(pages_movie=pages_movie, pages_tv=pages_tv)
-                if enriched.empty:
-                    st.error("Corpus build returned no items.")
-                else:
-                    index = build_index_and_save(enriched)
-                    meta, index = load_index_and_meta()
-                    if index is not None and not meta.empty:
-                        st.success(f"Built and saved index with {len(meta)} titles.")
+# Auto-build a small index on first run (fast), then reuse it
+AUTO_BUILD_ON_FIRST_RUN = True
+DEFAULT_MOVIE_PAGES = 3
+DEFAULT_TV_PAGES = 2
+
+meta, index_tuple, X = load_index_and_meta()  # see functions below
+
+if (index_tuple is None or meta.empty) and AUTO_BUILD_ON_FIRST_RUN:
+    with st.spinner("First run: building a small corpus & index…"):
+        try:
+            enriched = quick_build_corpus(pages_movie=DEFAULT_MOVIE_PAGES,
+                                          pages_tv=DEFAULT_TV_PAGES)
+            if enriched.empty:
+                st.warning("Auto-build returned no items. Use the manual builder.")
+            else:
+                index_tuple, X = build_index_and_save(enriched)  # returns ("faiss", index) or ("sklearn", nn)
+                meta, index_tuple, X = load_index_and_meta()
+                if index_tuple is not None and not meta.empty:
+                    st.success(f"Built index with {len(meta)} titles.")
+        except Exception as e:
+            st.error(f"Auto-build failed: {e}")
 
 st.divider()
 
