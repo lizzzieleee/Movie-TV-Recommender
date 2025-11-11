@@ -49,6 +49,11 @@ try:
 except ImportError:
     USE_FAISS = False
 
+MOVIE_PAGES   = int(st.secrets.get("CORPUS_MOVIE_PAGES", 5))
+TV_PAGES      = int(st.secrets.get("CORPUS_TV_PAGES", 5))
+DATE_GTE      = st.secrets.get("CORPUS_DATE_GTE", "2016-01-01")
+LANGUAGE      = st.secrets.get("CORPUS_LANGUAGE", "en")
+
 # ==============================
 # Heavy libs for embeddings/index
 # ==============================
@@ -131,7 +136,7 @@ def make_feature_text_rich(data: Dict[str, Any]) -> str:
 # ==============================
 # Discover API to build a corpus
 # ==============================
-def collect_discover(media_type="movie", pages=3, date_gte="2016-01-01", language="en") -> pd.DataFrame:
+def collect_discover(media_type="movie", pages=5, date_gte=DATE_GTE, language=LANGUAGE): -> pd.DataFrame:
     rows = []
     date_field = "primary_release_date.gte" if media_type == "movie" else "first_air_date.gte"
     for p in range(1, pages + 1):
