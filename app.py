@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import sys
 import platform
 import torch 
+import sentence_transformers
 
 # ==============================
 # Env + constants (v3 API key)
