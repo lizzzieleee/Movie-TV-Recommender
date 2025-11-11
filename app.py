@@ -57,16 +57,6 @@ def get_embedder():
 
 EMBEDDER = get_embedder()
 
-# add near your imports
-from sentence_transformers import CrossEncoder
-
-@st.cache_resource(show_spinner=False)
-def get_cross_encoder():
-    # small, fast, and good enough to noticeably improve quality
-    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-
-CROSS = get_cross_encoder()
-
 # ==============================
 # HTTP helpers (v3 key in params)
 # ==============================
@@ -133,7 +123,7 @@ def make_feature_text_rich(data: Dict[str, Any]) -> str:
 # ==============================
 # Discover API to build a corpus
 # ==============================
-def collect_discover(media_type="movie", pages=5, date_gte="1990-01-01", language="en") -> pd.DataFrame:
+def collect_discover(media_type="movie", pages=5, date_gte="2016-01-01", language="en") -> pd.DataFrame:
     rows = []
     date_field = "primary_release_date.gte" if media_type == "movie" else "first_air_date.gte"
     for p in range(1, pages + 1):
@@ -299,33 +289,6 @@ def recommend_from_selected(
 
     return recs.head(k).reset_index(drop=True)
 
-def rerank_with_crossencoder(query_text: str, recs_df: pd.DataFrame, top_k: int = 10) -> pd.DataFrame:
-    if recs_df.empty:
-        return recs_df
-    # Build pairs: (query_text, candidate_text)
-    # Reuse your already-rich feature text
-    pairs = [(query_text, f"{t} :: {feat}") 
-             for t, feat in zip(recs_df["title"].tolist(),
-                                recs_df.get("feature_text", recs_df["title"]).fillna("").tolist())]
-    scores = CROSS.predict(pairs)  # higher = better
-    recs = recs_df.copy()
-    recs["ce_score"] = scores
-    return recs.sort_values("ce_score", ascending=False).head(top_k).reset_index(drop=True)
-
-def build_query_text(liked_items: List[Dict[str, Any]]) -> str:
-    parts = []
-    for it in liked_items[:5]:
-        d = fetch_details_rich(it["media_type"], int(it["tmdb_id"]))
-        parts += [
-            d.get("title") or "",
-            d.get("overview") or "",
-            " ".join(d.get("genres", [])),
-            " ".join(d.get("keywords", [])),
-            " ".join(d.get("cast", [])),
-            " ".join(d.get("crew", [])),
-        ]
-    return " ".join([p for p in parts if p]).strip()
-
 # ==============================
 # UI (Recommender-only) with type-ahead + chips
 # ==============================
@@ -364,8 +327,8 @@ if "selected_idx" not in st.session_state:
 meta, index_tuple, X = load_index_and_meta()
 # Auto-build a small index on first run (fast), then reuse it
 AUTO_BUILD_ON_FIRST_RUN = True
-DEFAULT_MOVIE_PAGES = 5
-DEFAULT_TV_PAGES = 5
+DEFAULT_MOVIE_PAGES = 3
+DEFAULT_TV_PAGES = 2
 
 meta, index_tuple, X = load_index_and_meta()  # see functions below
 
@@ -477,9 +440,7 @@ if st.button("✨ Get Recommendations"):
         st.warning("Add at least one title you like.")
     else:
         with st.spinner("Computing recommendations…"):
-            base_recs = recommend_from_selected(st.session_state.likes, meta, index_tuple, X, k= max(top_k*6, 200), popularity_blend=pop_blend)
-            qtext = build_query_text(st.session_state.likes)
-            recs = rerank_with_crossencoder(qtext, base_recs, top_k=top_k)
+            recs = recommend_from_selected(st.session_state.likes, meta, index_tuple, X, k=top_k, popularity_blend=pop_blend)
 
         if recs.empty:
             st.info("No recommendations found. Try different titles.")
