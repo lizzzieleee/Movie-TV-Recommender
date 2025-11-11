@@ -40,6 +40,8 @@ except Exception as e:
 BASE_URL = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"
 
+TMDB_API_KEY = st.secrets.get("TMDB_API_KEY")
+
 # ==============================
 # Heavy libs for embeddings/index
 # ==============================
