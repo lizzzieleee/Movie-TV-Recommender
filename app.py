@@ -9,6 +9,9 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+import sys
+import platform
+
 # ==============================
 # Env + constants (v3 API key)
 # ==============================
