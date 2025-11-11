@@ -37,6 +37,9 @@ try:
 except Exception as e:
     st.error(f"❌ Error loading index: {e}")
 
+BASE_URL = "https://api.themoviedb.org/3"
+IMG_BASE = "https://image.tmdb.org/t/p"
+
 # ==============================
 # Heavy libs for embeddings/index
 # ==============================
