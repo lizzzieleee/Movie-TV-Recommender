@@ -309,8 +309,6 @@ if "likes" not in st.session_state:
     st.session_state.likes: List[Dict[str, Any]] = []
 if "search_results" not in st.session_state:
     st.session_state.search_results: List[Dict[str, Any]] = []
-if "selected_idx" not in st.session_state:
-    st.session_state.selected_idx: Optional[int] = None
 
 # Auto-build a small index on first run (fast), then reuse it
 AUTO_BUILD_ON_FIRST_RUN = True
@@ -368,10 +366,8 @@ if submitted and query.strip():
             if item.get("media_type") in {"movie", "tv"}
         ]
         st.session_state.search_results = results
-        st.session_state.selected_idx = None
     except Exception as e:
         st.session_state.search_results = []
-        st.session_state.selected_idx = None
         st.warning(f"No results found. ({e})")
 
 # Dropdown fed from last search
