@@ -251,7 +251,6 @@ def recommend_from_selected(
         idxs = I[0]
     else:
         # sklearn NearestNeighbors (cosine distance -> similarity = 1 - dist)
-        from sklearn.neighbors import NearestNeighbors  # safe if fallback
         dists, idxs = index.kneighbors(qvec, n_neighbors=min(m, X.shape[0]))
         sims = 1.0 - dists[0]
         idxs = idxs[0]
