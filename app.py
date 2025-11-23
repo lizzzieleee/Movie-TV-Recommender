@@ -45,7 +45,6 @@ except Exception:
 # Heavy libs for embeddings/index
 # ==============================
 try:
-    import faiss
     from sentence_transformers import SentenceTransformer
 except Exception:
     st.error("Missing libraries. Install with:\n\npip install sentence-transformers faiss-cpu")
