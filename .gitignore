@@ -254,6 +254,7 @@ data/
 notebooks/
 
 # don’t ignore the model artifacts
+!models/
 !models/meta.parquet
 !models/index.faiss
 !models/nn.joblib
