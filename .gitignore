@@ -233,14 +233,12 @@ Thumbs.db
 .streamlit/
 .cache/
 cache/
-models/
 tmdb/
 data/
 
 # --- Logs / temporary files ---
 *.log
 *.tmp
-*.parquet
 *.json
 *.csv
 *.gz
