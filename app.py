@@ -15,17 +15,7 @@ from dotenv import load_dotenv
 ENV_PATH = Path(__file__).with_name(".env")
 load_dotenv(dotenv_path=ENV_PATH)
 
-# --- Prefer Streamlit secrets when available ---
-TMDB_API_KEY = st.secrets.get("TMDB_API_KEY")
-
-# --- Fallback for local development ---
-if not TMDB_API_KEY:
-    load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
-    TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-
-if not TMDB_API_KEY:
-    st.error("⚠️ TMDB_API_KEY not found. Add it to Streamlit Secrets or .env.")
-    st.stop()
+TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
     
 BASE_URL = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | original
