@@ -433,7 +433,7 @@ if st.button("✨ Get Recommendations"):
                 with col1:
                     purl = None
                     # 1) try from meta
-                    if "poster_path" in r and pd.notna(r["poster_path"]):
+                    if pd.notna(r["poster_path"]):
                         purl = poster_url(r["poster_path"], size="w342")
                     # 2) fallback: fetch details (cached) to get poster
                     if not purl:
