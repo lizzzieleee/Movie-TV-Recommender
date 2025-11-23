@@ -15,10 +15,20 @@ from dotenv import load_dotenv
 ENV_PATH = Path(__file__).with_name(".env")
 load_dotenv(dotenv_path=ENV_PATH)
 
-TMDB_API_KEY = st.secrets.get("TMDB_API_KEY") or os.getenv("TMDB_API_KEY")
+# Safe Streamlit secrets access
+tmdb_key_from_secrets = None
+if hasattr(st, "secrets"):
+    try:
+        tmdb_key_from_secrets = st.secrets.get("TMDB_API_KEY", None)
+    except Exception:
+        tmdb_key_from_secrets = None
+
+TMDB_API_KEY = tmdb_key_from_secrets or os.getenv("TMDB_API_KEY")
+
 if not TMDB_API_KEY:
-    st.error("⚠️ TMDB_API_KEY not found. Add it to Streamlit Secrets or .env.")
-    st.stop()
+    raise RuntimeError(
+        "TMDB_API_KEY not found. Add it to .env OR set it in Streamlit Secrets."
+    )
     
 BASE_URL = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | original
