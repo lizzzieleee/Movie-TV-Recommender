@@ -170,7 +170,6 @@ def quick_build_corpus(pages_movie=5, pages_tv=5) -> pd.DataFrame:
 # Index build/load + recommend
 # ==============================
 def build_index_and_save(enriched: pd.DataFrame):
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
     texts = enriched["feature_text"].fillna("").tolist()
     X = EMBEDDER.encode(texts, normalize_embeddings=True).astype("float32")
 
