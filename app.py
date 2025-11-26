@@ -24,11 +24,12 @@ if hasattr(st, "secrets"):
         tmdb_key_from_secrets = None
 
 TMDB_API_KEY = tmdb_key_from_secrets or os.getenv("TMDB_API_KEY")
+OFFLINE_MODE = TMDB_API_KEY is None
 
-if not TMDB_API_KEY:
-    raise RuntimeError(
-        "TMDB_API_KEY not found. Add it to .env OR set it in Streamlit Secrets."
-    )
+if OFFLINE_MODE:
+    # We can still run using the precomputed corpus & index
+    # Some features (online search, rich details) will be limited.
+    pass
     
 BASE_URL = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p"  # w92 | w154 | w185 | w342 | w500 | original
@@ -63,6 +64,8 @@ EMBEDDER = get_embedder()
 # HTTP helpers (v3 key in params)
 # ==============================
 def get_tmdb(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if OFFLINE_MODE:
+        raise RuntimeError("TMDB API not available in offline mode.")
     params = dict(params or {})
     params["api_key"] = TMDB_API_KEY
     url = f"{BASE_URL}{endpoint}"
@@ -377,26 +380,44 @@ def main():
         with button_col:
             submitted = st.form_submit_button("Search", use_container_width=True)
     
-    # Run the search only when the form is submitted (button click OR Enter)
     if submitted and query.strip():
-        try:
-            j = get_tmdb("/search/multi", {"query": query.strip(), "include_adult": False, "page": 1})
-            results = [
-                {
-                    "title": item.get("title") or item.get("name"),
-                    "year": (item.get("release_date") or item.get("first_air_date") or "????")[:4],
-                    "media_type": item.get("media_type"),
-                    "tmdb_id": int(item.get("id")),
-                    "poster_path": item.get("poster_path"),
-                }
-                for item in j.get("results", [])
-                if item.get("media_type") in {"movie", "tv"}
-            ]
-            st.session_state.search_results = results
-        except Exception as e:
-            st.session_state.search_results = []
-            st.warning(f"No results found. ({e})")
-    
+        if OFFLINE_MODE:
+            # Simple title search in preloaded corpus
+            if meta is None or meta.empty:
+                st.warning("No preloaded corpus found for offline search.")
+                st.session_state.search_results = []
+            else:
+                mask = meta["title"].str.contains(query.strip(), case=False, na=False)
+                hits = meta[mask].head(20)
+                st.session_state.search_results = [
+                    {
+                        "title": row["title"],
+                        "year": (str(row.get("release_date")) or "????")[:4],
+                        "media_type": row["media_type"],
+                        "tmdb_id": int(row["tmdb_id"]),
+                        "poster_path": row.get("poster_path"),
+                    }
+                    for _, row in hits.iterrows()
+                ]
+        else:
+            try:
+                j = get_tmdb("/search/multi", {"query": query.strip(), "include_adult": False, "page": 1})
+                results = [
+                    {
+                        "title": item.get("title") or item.get("name"),
+                        "year": (item.get("release_date") or item.get("first_air_date") or "????")[:4],
+                        "media_type": item.get("media_type"),
+                        "tmdb_id": int(item.get("id")),
+                        "poster_path": item.get("poster_path"),
+                    }
+                    for item in j.get("results", [])
+                    if item.get("media_type") in {"movie", "tv"}
+                ]
+                st.session_state.search_results = results
+            except Exception as e:
+                st.session_state.search_results = []
+                st.warning(f"No results found. ({e})")
+        
     # Dropdown fed from last search
     options = list(range(len(st.session_state.get("search_results", []))))
     labels = [
@@ -484,38 +505,20 @@ def main():
                             st.write(f"Relevance score: {r['score']:.3f}")
     
                         with st.expander("🔎 View full details"):
-                            try:
-                                d = fetch_details_rich(r["media_type"], int(r["tmdb_id"]))
-                                genres = ", ".join(d.get("genres") or [])
-                                cast = ", ".join(d.get("cast") or [])
-                                crew = ", ".join(d.get("crew") or [])
-                                keywords = ", ".join(d.get("keywords") or [])
-    
-                                st.write(d.get("overview") or "—")
-                                st.write(f"**Genres:** {genres or '—'}")
-                                if keywords:
-                                    st.write(f"**Keywords:** {keywords}")
-                                if cast:
-                                    st.write(f"**Cast (top 10):** {cast}")
-                                if crew:
-                                    st.write(f"**Crew:** {crew}")
-                                st.write(f"**Release/Air date:** {d.get('release_date') or '—'}")
-                                if d.get("runtime"):
-                                    st.write(f"**Runtime:** {d['runtime']} min")
-                                if d.get("seasons"):
-                                    st.write(f"**Seasons:** {d['seasons']}")
-                                if d.get("episodes"):
-                                    st.write(f"**Episodes:** {d['episodes']}")
-                                if d.get("vote_average") is not None:
-                                    st.write(f"**User rating:** {d['vote_average']}")
-                                if d.get("popularity") is not None:
-                                    st.write(f"**Popularity:** {int(d['popularity'])}")
-                                if d.get("homepage"):
-                                    st.write(f"[Homepage]({d['homepage']})")
-                                if d.get("status"):
-                                    st.write(f"**Status:** {d['status']}")
-                            except requests.HTTPError as e:
-                                st.write(f"Could not fetch details: {e}")
+                            if OFFLINE_MODE:
+                                # Use only metadata we already have
+                                st.write(r.get("overview", "No overview available in offline mode."))
+                                st.write(f"**Media type:** {r['media_type'].upper()}")
+                                st.write(f"**Release/Air date:** {r.get('release_date') or '—'}")
+                                if "popularity" in r:
+                                    st.write(f"**Popularity:** {int(r['popularity'])}")
+                                # You can add more fields if you store them in meta
+                            else:
+                                try:
+                                    d = fetch_details_rich(r["media_type"], int(r["tmdb_id"]))
+                                    ...
+                                except requests.HTTPError as e:
+                                    st.write(f"Could not fetch details: {e}")
 
 if __name__ == "__main__":
     main()
